@@ -25,13 +25,17 @@ env/
 Thumbs.db
 desktop.ini
 
-# Model artifacts (tracked in models/ via DVC or manually)
+# Model binaries (use DVC or S3 for these)
 *.pkl
-!models/**/*.pkl
+*.joblib
+!models/**/*.json
+!models/**/*.txt
 
 # Data (raw data too large for git)
 data/raw/*.csv
 data/processed/*.csv
+*.csv
+comprehensive_fault_training_data.csv
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
