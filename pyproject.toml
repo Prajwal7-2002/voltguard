@@ -1,0 +1,74 @@
+[project]
+name = "voltguard"
+version = "0.1.0"
+description = "Predictive diagnostics & autonomous self-healing for Electric Vehicle fleets"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Prajwal"},
+]
+keywords = ["ev", "diagnostics", "fault-detection", "self-healing", "xgboost", "shap"]
+
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "shap>=0.44",
+    "joblib>=1.3",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7",
+    "seaborn>=0.13",
+    "streamlit>=1.30",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "SQLAlchemy>=2.0",
+    "plotly>=5.18",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "pre-commit>=3.6",
+]
+notebooks = [
+    "jupyter>=1.0",
+    "ipykernel>=6.0",
+]
+
+[project.scripts]
+voltguard-train = "scripts.train:main"
+voltguard-simulate = "scripts.simulate:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["voltguard*", "config*", "api*", "scripts*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

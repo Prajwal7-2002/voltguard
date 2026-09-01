@@ -1,0 +1,145 @@
+{
+    "test_accuracy": 0.9884206729685457,
+    "test_precision_macro": 0.932577562051382,
+    "test_recall_macro": 0.9311213885669805,
+    "test_f1_macro": 0.9314875708284681,
+    "num_classes": 5,
+    "fault_labels": {
+        "0": "Nominal",
+        "1": "Stator Overheat",
+        "2": "Battery Thermal Stress",
+        "3": "Coolant System Failure",
+        "4": "Inverter Over-Current"
+    },
+    "class_distribution": {
+        "0": 1216934,
+        "1": 79849,
+        "2": 558,
+        "3": 18323,
+        "4": 15152
+    },
+    "dataset_rows": 1330816,
+    "features_used": [
+        "ambient",
+        "coolant",
+        "u_d",
+        "u_q",
+        "motor_speed",
+        "torque",
+        "i_d",
+        "i_q",
+        "thermal_delta",
+        "dt_dt",
+        "acceleration_gradient",
+        "power_draw",
+        "battery_temp"
+    ],
+    "leak_proof": true,
+    "per_class_report": {
+        "Nominal": {
+            "precision": 0.9929481486332178,
+            "recall": 0.9968075534026057,
+            "f1-score": 0.9948741080948085,
+            "support": 243387.0
+        },
+        "Stator Overheat": {
+            "precision": 0.9567301291439222,
+            "recall": 0.8999373825923607,
+            "f1-score": 0.927465152297367,
+            "support": 15970.0
+        },
+        "Battery Thermal Stress": {
+            "precision": 0.9230769230769231,
+            "recall": 0.9642857142857143,
+            "f1-score": 0.9432314410480349,
+            "support": 112.0
+        },
+        "Coolant System Failure": {
+            "precision": 0.9003939223410242,
+            "recall": 0.8731241473396999,
+            "f1-score": 0.8865493835711318,
+            "support": 3665.0
+        },
+        "Inverter Over-Current": {
+            "precision": 0.8897386870618228,
+            "recall": 0.9214521452145215,
+            "f1-score": 0.9053177691309987,
+            "support": 3030.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            242610,
+            431,
+            9,
+            157,
+            180
+        ],
+        [
+            1236,
+            14372,
+            0,
+            196,
+            166
+        ],
+        [
+            4,
+            0,
+            108,
+            0,
+            0
+        ],
+        [
+            307,
+            158,
+            0,
+            3200,
+            0
+        ],
+        [
+            176,
+            61,
+            0,
+            1,
+            2792
+        ]
+    ],
+    "confusion_matrix_labels": [
+        "Nominal",
+        "Stator Overheat",
+        "Battery Thermal Stress",
+        "Coolant System Failure",
+        "Inverter Over-Current"
+    ],
+    "per_class_precision_recall": {
+        "Nominal": {
+            "average_precision": 0.9989217651840082,
+            "pr_curve_points": 86837
+        },
+        "Stator Overheat": {
+            "average_precision": 0.9802275625065295,
+            "pr_curve_points": 261356
+        },
+        "Battery Thermal Stress": {
+            "average_precision": 0.9744557272491501,
+            "pr_curve_points": 259994
+        },
+        "Coolant System Failure": {
+            "average_precision": 0.9491359180182144,
+            "pr_curve_points": 262722
+        },
+        "Inverter Over-Current": {
+            "average_precision": 0.9731305512958337,
+            "pr_curve_points": 263562
+        }
+    },
+    "benchmark_split": "random_stratified_rows",
+    "group_column": null,
+    "train_rows": 1064652,
+    "test_rows": 266164,
+    "cv_split": "not_recorded_for_legacy_artifact",
+    "leakage_notes": [
+        "Legacy artifact trained with random row holdout. Retrain to produce profile-held-out metrics.",
+        "Hidden thermal channels are excluded from model features."
+    ]
+}
