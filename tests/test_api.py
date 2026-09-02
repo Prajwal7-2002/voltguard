@@ -1,3 +1,43 @@
+import pytest
+from pydantic import ValidationError
+
+from api.schemas import SensorReading
+
+
+def valid_sensor_reading() -> dict:
+    return {
+        "vehicle_id": "v1",
+        "ambient": 25,
+        "coolant": 35,
+        "u_d": 10,
+        "u_q": 20,
+        "motor_speed": 1000,
+        "torque": 5,
+        "i_d": 2,
+        "i_q": 3,
+        "pm": 40,
+        "stator_yoke": 45,
+        "stator_tooth": 50,
+        "stator_winding": 55,
+    }
+
+
+def test_sensor_reading_rejects_impossible_temperature():
+    payload = valid_sensor_reading()
+    payload["stator_winding"] = 300
+
+    with pytest.raises(ValidationError):
+        SensorReading.model_validate(payload)
+
+
+def test_sensor_reading_rejects_empty_vehicle_id():
+    payload = valid_sensor_reading()
+    payload["vehicle_id"] = ""
+
+    with pytest.raises(ValidationError):
+        SensorReading.model_validate(payload)
+
+
 def test_read_root(client):
     """Verify standard application heartbeat."""
     response = client.get("/")
