@@ -1,0 +1,22 @@
+# Full stack: FastAPI (model + simulator) and the Next.js dashboard.
+#   docker compose up --build   ->  http://localhost:3000
+services:
+  api:
+    build: .
+    environment:
+      VOLTGUARD_CORS_ORIGINS: http://localhost:3000
+    volumes:
+      # Optional: mount the PMSM dataset to enable replay with ground truth.
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./web
+    environment:
+      VOLTGUARD_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy

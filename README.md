@@ -6,8 +6,9 @@ electrical and control telemetry. It uses the **Paderborn University PMSM datase
 XGBoost, explains the result with SHAP, recommends a corrective action, and closes the
 loop in a simulator by derating the motor.
 
-It ships as a FastAPI service with a prediction audit log, a Streamlit dashboard,
-a versioned model registry, feature-drift checks, Docker, and CI.
+It ships as a FastAPI service with a prediction audit log, a Next.js dashboard
+that checks every alert against ground truth, a versioned model registry,
+feature-drift checks, Docker Compose, and CI.
 
 ---
 
@@ -62,6 +63,8 @@ baseline scores 88–93% and 0.19 on the same splits. v1 is kept for comparison;
 ## Architecture
 
 ```text
+browser ──► Next.js (web/) ──/api proxy──► FastAPI
+
 telemetry ──► FastAPI /predict ──► FaultPredictor (features → XGBoost → SHAP)
                   │                        │
                   │                        └─► root_cause.resolve_fault → recommended action
@@ -79,7 +82,9 @@ simulator: VehicleSimulator replays PMSM drives ─► predict ─► action ─
 | `voltguard/root_cause/` | Maps fault class and SHAP evidence to root cause and action |
 | `voltguard/simulator/` | PMSM replay with a closed-loop derate effect |
 | `voltguard/database/` | ORM models and session management |
-| `dashboard/` | Streamlit UI (live monitor, fleet, explainability, model performance) |
+| `web/` | Next.js dashboard: overview, live monitor, fleet, explainability, model report |
+| `api/routes/simulator.py` | Replay sessions that return predictions next to proxy ground truth |
+| `dashboard/` | Streamlit app, kept as an internal ML debugging tool (drift, feature checks) |
 | `models/vN/` | Versioned artifacts; `models/latest.txt` selects the served version |
 
 **Design choices**
@@ -95,34 +100,37 @@ simulator: VehicleSimulator replays PMSM drives ─► predict ─► action ─
 
 ## Quickstart
 
-### 1. Install
+### Option A: everything in Docker
+```bash
+docker compose up --build        # dashboard http://localhost:3000, API http://localhost:8000/docs
+```
+To replay real drives with ground truth, first put the dataset in `data/` (see below).
+
+### Option B: local development
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env
+uvicorn api.main:app --reload                       # API on :8000, uses the committed model v2
+
+cd web && pnpm install && pnpm dev                  # dashboard on :3000
 ```
 
-### 2. Run the API (uses the committed model `v2`)
-```bash
-uvicorn api.main:app --reload          # http://localhost:8000/docs
-```
-Or with Docker:
-```bash
-docker build -t voltguard . && docker run -p 8000:8000 voltguard
-```
+### The replay dataset (optional, needed for the simulator's ground truth)
+Download the [PMSM temperature dataset](https://www.kaggle.com/datasets/wkirgsn/electric-motor-temperature)
+and save `measures_v2.csv` as `data/comprehensive_fault_training_data.csv`. Without it the
+dashboard still works, but the simulator replays a placeholder reading with no ground truth.
 
-### 3. Dashboard and simulator (need the dataset)
-Download the [PMSM temperature dataset](https://www.kaggle.com/datasets/wkirgsn/electric-motor-temperature),
-save `measures_v2.csv` as `data/comprehensive_fault_training_data.csv`, then:
-```bash
-streamlit run dashboard/app.py
-python scripts/simulate.py --vehicles 3 --ticks 20
-```
-
-### 4. Retrain
+### Retrain
 ```bash
 python scripts/train.py                 # writes models/vN and updates models/latest.txt
 python scripts/generate_evaluation.py   # regenerates notebooks/04_evaluation.ipynb
+```
+
+### Internal tools
+```bash
+streamlit run dashboard/app.py          # ML debugging views (drift baseline, feature contract)
+python scripts/simulate.py --vehicles 3 --ticks 20
 ```
 
 ---
@@ -134,6 +142,11 @@ python scripts/generate_evaluation.py   # regenerates notebooks/04_evaluation.ip
 | POST | `/predict` | Classify one reading; logged to `prediction_logs` |
 | POST | `/predict/batch` | 1–1000 readings, all-or-nothing |
 | POST | `/predict/forecast` | Trend-extrapolated early warning |
+| POST | `/predict/explain` | Score one what-if scenario in isolation (no logging, no history) |
+| POST | `/simulator/sessions` | Start a replay session with 1–12 vehicles |
+| POST | `/simulator/sessions/{id}/tick` | Advance 1–200 ticks; returns prediction, ground truth, action, derate state |
+| DELETE | `/simulator/sessions/{id}` | End a session |
+| GET | `/data/summary` | Class balance, per-drive stress rates, input ranges |
 | GET | `/vehicles` | Fleet health overview |
 | GET | `/vehicles/{id}/health` | Health of one vehicle |
 | GET | `/models/latest`, `/models/{version}` | Model metrics |
@@ -145,7 +158,9 @@ python scripts/generate_evaluation.py   # regenerates notebooks/04_evaluation.ip
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./voltguard.db` | Any SQLAlchemy URL |
-| `VOLTGUARD_CORS_ORIGINS` | `http://localhost:8501` | Comma-separated allowed origins |
+| `VOLTGUARD_CORS_ORIGINS` | `http://localhost:3000,http://localhost:8501` | Comma-separated allowed origins |
+| `VOLTGUARD_REPLAY_DATA` | `data/comprehensive_fault_training_data.csv` | Dataset the simulator replays |
+| `VOLTGUARD_API_URL` (web) | `http://localhost:8000` | Where the Next.js `/api` proxy forwards requests |
 | `VOLTGUARD_ENABLE_DEMO_ENDPOINTS` | `0` | Set to `1` to enable `POST /vehicles/_seed_mock_fleet`, which wipes the fleet table |
 | `VOLTGUARD_CONFIG` | `config/thresholds.yaml` | Thresholds and model hyperparameters |
 
@@ -155,13 +170,14 @@ python scripts/generate_evaluation.py   # regenerates notebooks/04_evaluation.ip
 make test     # pytest with coverage
 make lint     # ruff
 make format   # ruff format
+cd web && pnpm lint && pnpm typecheck && pnpm build
 ```
-CI (`.github/workflows/ci.yml`) runs lint and tests on Python 3.10 and 3.12, builds
-the Docker image, and smoke-tests `/health`.
+CI (`.github/workflows/ci.yml`) runs Python lint and tests on 3.10 and 3.12, web lint,
+type-check and build, then builds both Docker images and smoke-tests the API's `/health`.
 
 ## Roadmap
 - Database migrations (Alembic) instead of `create_all` at startup
 - Authentication on write endpoints
 - Connect `/ws/alerts` to the internal event bus
-- Persist the per-vehicle feature buffer (currently in process memory, one worker only)
+- Persist the per-vehicle feature buffer and simulator sessions (currently in process memory, one worker only)
 - Save models in XGBoost's native JSON format instead of pickle

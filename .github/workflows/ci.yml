@@ -24,9 +24,29 @@ jobs:
       - name: Test
         run: pytest --cov=voltguard --cov=api --cov-report=term-missing
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+
   docker:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, web]
     steps:
       - uses: actions/checkout@v4
       - name: Build image
@@ -36,3 +56,5 @@ jobs:
           docker run -d --name vg -p 8000:8000 voltguard:ci
           for i in $(seq 1 30); do curl -fs localhost:8000/health && exit 0; sleep 2; done
           docker logs vg; exit 1
+      - name: Build web image
+        run: docker build -t voltguard-web:ci web
