@@ -14,6 +14,8 @@ from pydantic import BaseModel
 # regardless of the working directory.
 # ---------------------------------------------------------------------------
 _CONFIG_DIR = Path(__file__).resolve().parent
+# Repository root: models/ and data/ resolve against this, not the working directory.
+PROJECT_ROOT = _CONFIG_DIR.parent
 _DEFAULT_THRESHOLDS_PATH = _CONFIG_DIR / "thresholds.yaml"
 
 

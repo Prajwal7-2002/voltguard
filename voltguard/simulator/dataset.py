@@ -14,13 +14,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from config.settings import PROJECT_ROOT
 from voltguard.features.engine import FEATURE_COLUMNS, generate_fault_codes
 
 DEFAULT_DATA_PATH = "data/comprehensive_fault_training_data.csv"
 
 
 def data_path() -> Path:
-    return Path(os.getenv("VOLTGUARD_REPLAY_DATA", DEFAULT_DATA_PATH))
+    """Dataset location; relative paths resolve against the project root, not the cwd."""
+    return PROJECT_ROOT / os.getenv("VOLTGUARD_REPLAY_DATA", DEFAULT_DATA_PATH)
 
 
 @lru_cache(maxsize=1)

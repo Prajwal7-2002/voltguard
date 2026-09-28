@@ -8,15 +8,16 @@ from typing import Any
 
 import joblib
 
+from config.settings import PROJECT_ROOT
+
 logger = logging.getLogger(__name__)
 
 
 class ModelRegistry:
     """Handles versioning, saving, and loading of ML models."""
 
-    def __init__(self, base_dir: str | Path = "models"):
-        self.base_dir = Path(base_dir)
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, base_dir: str | Path | None = None):
+        self.base_dir = Path(base_dir) if base_dir is not None else PROJECT_ROOT / "models"
         self.latest_pointer = self.base_dir / "latest.txt"
 
     def _get_next_version(self) -> str:
@@ -41,6 +42,7 @@ class ModelRegistry:
         baseline: dict | None = None,
     ) -> str:
         """Saves model, scaler, metrics, and data baselines under a specific version."""
+        self.base_dir.mkdir(parents=True, exist_ok=True)
         if version is None:
             version = self._get_next_version()
 
@@ -67,7 +69,7 @@ class ModelRegistry:
     def get_latest_version(self) -> str:
         """Retrieves the string of the latest model version."""
         if not self.latest_pointer.exists():
-            raise FileNotFoundError("No models found in the registry.")
+            raise FileNotFoundError(f"No models found in the registry at {self.base_dir}.")
         with open(self.latest_pointer) as f:
             return f.read().strip()
 

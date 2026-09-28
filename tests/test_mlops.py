@@ -50,3 +50,12 @@ def test_critical_drift_distribution():
     assert result["threshold_exceeded"]
     assert result["status"] == "drifting"
     assert result["drift_score"] > 2.0
+
+
+def test_registry_is_independent_of_working_directory(tmp_path, monkeypatch):
+    """Starting the API from another folder must still find models/ at the project root."""
+    from voltguard.diagnostics.registry import ModelRegistry
+
+    monkeypatch.chdir(tmp_path)
+    assert ModelRegistry().get_latest_version()
+    assert not (tmp_path / "models").exists()  # reading must not create directories

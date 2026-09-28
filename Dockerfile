@@ -16,7 +16,8 @@ COPY voltguard ./voltguard
 COPY config ./config
 COPY api ./api
 COPY scripts ./scripts
-RUN pip install .
+# Editable install keeps PROJECT_ROOT at /app, where models/ and data/ live.
+RUN pip install -e .
 
 COPY models ./models
 

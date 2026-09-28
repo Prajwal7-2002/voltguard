@@ -7,12 +7,12 @@ Includes compatibility repair for legacy baseline artifacts.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import pandas as pd
 
 from voltguard.diagnostics.registry import ModelRegistry
 from voltguard.features.engine import ALL_FEATURES, engineer_features
+from voltguard.simulator.dataset import data_path as replay_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class DriftDetector:
 
     def _build_baseline_from_training_data(self) -> dict:
         """Build baseline directly from local training CSV if available."""
-        data_path = Path("data/comprehensive_fault_training_data.csv")
+        data_path = replay_data_path()
         if not data_path.exists():
             return {}
 
