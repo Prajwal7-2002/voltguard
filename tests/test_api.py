@@ -1,37 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from api.main import app
-from api.routes.predict import get_predictor
 from api.schemas import SensorReading
 from voltguard.database.models import PredictionLog, VehicleDB
-
-
-class StubPredictor:
-    """Deterministic stand-in so API tests don't need a trained model or SHAP."""
-
-    def __init__(self, fault: int = 1, p_nominal: float = 0.2):
-        self.fault, self.p_nominal = fault, p_nominal
-
-    def predict(self, vehicle_id, raw_data):
-        if raw_data.get("torque") == 999:
-            raise RuntimeError("boom")
-        probs = {0: self.p_nominal, self.fault: 1 - self.p_nominal} if self.fault else {0: 1.0}
-        return {
-            "predicted_fault": self.fault,
-            "fault_label": "Stator Overheat" if self.fault else "Nominal",
-            "confidence": max(probs.values()),
-            "probabilities": probs,
-            "explanations": {"coolant": 0.5},
-            "input": raw_data,
-        }
-
-
-@pytest.fixture
-def stub_predictor():
-    app.dependency_overrides[get_predictor] = lambda: StubPredictor()
-    yield
-    app.dependency_overrides.pop(get_predictor, None)
 
 
 def valid_sensor_reading() -> dict:

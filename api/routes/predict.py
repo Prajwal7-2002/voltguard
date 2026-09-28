@@ -1,9 +1,13 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
+    ExplainRequest,
+    ExplainResponse,
     ForecastResponse,
     PredictResponse,
     SensorReading,
@@ -13,6 +17,7 @@ from voltguard.database.config import get_db
 from voltguard.database.models import PredictionLog, VehicleDB
 from voltguard.diagnostics.predictor import FaultPredictor
 from voltguard.forecaster.engine import FaultForecaster
+from voltguard.root_cause.analyzer import resolve_fault
 
 logger = get_logger(__name__)
 
@@ -118,3 +123,25 @@ def forecast_fault(reading: SensorReading, forecaster: FaultForecaster = Depends
         logger.exception("Forecast failed for vehicle %s", reading.vehicle_id)
         raise HTTPException(status_code=500, detail="Forecast failed.") from e
     return ForecastResponse(**result)
+
+
+@router.post("/explain", response_model=ExplainResponse)
+def explain(scenario: ExplainRequest, predictor: FaultPredictor = Depends(get_predictor)):
+    """Score one what-if scenario in isolation. Nothing is logged or remembered.
+
+    Rate-of-change features are zero because the scenario has no history.
+    """
+    scratch_id = f"explain-{uuid.uuid4().hex}"
+    raw = scenario.model_dump()
+    try:
+        result = predictor.predict(scratch_id, raw)
+    except Exception as e:
+        logger.exception("Explain failed")
+        raise HTTPException(status_code=500, detail="Explanation failed.") from e
+    finally:
+        predictor.history.pop(scratch_id, None)
+
+    root_cause, action = None, None
+    if result["predicted_fault"] != 0:
+        root_cause, action = resolve_fault(result["predicted_fault"], result["explanations"], raw)
+    return ExplainResponse(**result, root_cause=root_cause, action=action)

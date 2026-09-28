@@ -1,9 +1,8 @@
 import random
 from typing import Any
 
-import pandas as pd
-
 from config.settings import cfg
+from voltguard.simulator.dataset import load_replay_data, stress_start_indices
 
 # Recommended-action keywords (see root_cause.analyzer) that command a load derate.
 _DERATE_KEYWORDS = ("derate", "limit", "reduce", "cut", "throttle")
@@ -37,24 +36,15 @@ class VehicleSimulator:
         self.soc = 100.0  # Start with full charge
         self.derate_ticks_remaining = 0
 
-        # Load the physical Kaggle dataset into memory for this vehicle
-        try:
-            self.df = pd.read_csv("data/comprehensive_fault_training_data.csv")
-            # Start near a fault-prone region so the dashboard shows realistic variety
-            # Find rows with high current or high coolant (fault-adjacent zones)
-            high_stress = self.df[
-                (self.df["i_q"].abs() > self.df["i_q"].quantile(0.85))
-                | (self.df["coolant"] > self.df["coolant"].quantile(0.85))
-            ]
-            if len(high_stress) > 100:
-                # Start 50 rows before a high-stress region (to show transition)
-                start = max(0, high_stress.index[random.randint(0, len(high_stress) - 1)] - 50)
-                self.current_idx = start
-            else:
-                self.current_idx = random.randint(0, len(self.df) - 1000)
-        except Exception:
-            self.df = None
-            self.current_idx = 0
+        # Shared, cached dataset (None when the CSV isn't present, e.g. in CI)
+        self.df = load_replay_data()
+        self.current_idx = 0
+        if self.df is not None:
+            # Start just before a high-load region so replays show transitions
+            starts = stress_start_indices()
+            self.current_idx = (
+                int(random.choice(starts)) if len(starts) else random.randint(0, len(self.df) - 1)
+            )
 
     def get_state(self) -> dict[str, Any]:
         """
@@ -106,6 +96,8 @@ class VehicleSimulator:
             "soc": round(self.soc, 2),
             "power_draw": round(power_draw, 2),
             "derated": self.derate_ticks_remaining > 0,
+            # Proxy ground-truth label for this row; None without the dataset
+            "true_fault": int(row["true_fault"]) if self.df is not None else None,
         }
         return state
 

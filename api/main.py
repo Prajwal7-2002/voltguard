@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.routes import alerts, models, predict, vehicles
+from api.routes import alerts, data, models, predict, simulator, vehicles
 from voltguard.database import models as db_models
 from voltguard.database.config import engine, get_db
 
@@ -28,7 +28,9 @@ app = FastAPI(
 # Comma-separated list, e.g. "https://fleet.example.com,http://localhost:8501"
 _cors_origins = [
     o.strip()
-    for o in os.getenv("VOLTGUARD_CORS_ORIGINS", "http://localhost:8501").split(",")
+    for o in os.getenv(
+        "VOLTGUARD_CORS_ORIGINS", "http://localhost:3000,http://localhost:8501"
+    ).split(",")
     if o.strip()
 ]
 app.add_middleware(
@@ -56,3 +58,5 @@ app.include_router(predict.router)
 app.include_router(models.router)
 app.include_router(alerts.router)
 app.include_router(vehicles.router)
+app.include_router(simulator.router)
+app.include_router(data.router)

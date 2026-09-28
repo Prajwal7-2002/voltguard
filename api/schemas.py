@@ -101,3 +101,24 @@ class FleetHealthResponse(BaseModel):
 class ModelMetricsResponse(BaseModel):
     version: str
     metrics: dict[str, Any]
+
+
+# ─── EXPLAINABILITY SCHEMAS ────────────────────────────────────────────────────
+
+
+class ExplainRequest(BaseModel):
+    """A single what-if scenario over the raw model inputs (no history is kept)."""
+
+    ambient: float = Field(..., ge=-80, le=100)
+    coolant: float = Field(..., ge=-80, le=180)
+    u_d: float = Field(..., ge=-1000, le=1000)
+    u_q: float = Field(..., ge=-1000, le=1000)
+    motor_speed: float = Field(..., ge=-20000, le=20000)
+    torque: float = Field(..., ge=-1000, le=1000)
+    i_d: float = Field(..., ge=-1000, le=1000)
+    i_q: float = Field(..., ge=-1000, le=1000)
+
+
+class ExplainResponse(PredictResponse):
+    root_cause: str | None = None
+    action: str | None = None

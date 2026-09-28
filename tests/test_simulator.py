@@ -35,7 +35,7 @@ def test_simulator_returns_pmsm_fields():
         assert key in reading, f"Missing key: {key}"
 
 
-def test_simulator_tick_advances():
+def test_simulator_tick_advances(replay_dataset):
     """Verify the playback index advances on each tick."""
     sim = VehicleSimulator("v-1011")
     idx_before = sim.current_idx
@@ -51,6 +51,8 @@ def test_simulator_values_are_numeric():
     for key, value in reading.items():
         if key == "vehicle_id":
             assert isinstance(value, str)
+        elif key == "true_fault" and value is None:
+            continue  # no ground truth without the dataset
         else:
             assert isinstance(value, (int, float)), f"{key} is {type(value)}, expected numeric"
 
@@ -97,3 +99,11 @@ def test_non_load_action_does_not_derate():
     sim = VehicleSimulator("v-derate")
     assert not sim.apply_effect("Schedule coolant system check. Part: Radiator")
     assert sim.get_state()["derated"] is False
+
+
+def test_replay_exposes_ground_truth(replay_dataset):
+    """With a dataset, each tick carries the proxy label the model was trained on."""
+    sim = VehicleSimulator("v-truth")
+    labels = {sim.tick()["true_fault"] for _ in range(len(replay_dataset))}
+    assert 0 in labels
+    assert labels - {0}, "hot tail of drive 2 should produce non-nominal labels"
