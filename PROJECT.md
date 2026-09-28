@@ -52,7 +52,6 @@ d:/cdre-e2w/
 │   │   └── engine.py           # engineer_features(), generate_fault_codes()
 │   ├── root_cause/
 │   │   └── analyzer.py         # resolve_fault() — root cause + spare parts
-│   ├── self_heal/              # LEGACY 3-class battery code, unused (pending removal)
 │   ├── simulator/
 │   │   ├── fleet.py            # FleetSimulator — multi-vehicle orchestration
 │   │   └── vehicle.py          # VehicleSimulator — CSV playback + sensors
