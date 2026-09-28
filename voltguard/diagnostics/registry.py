@@ -1,6 +1,7 @@
 """Model registry for ML artifact versioning and retrieval."""
 
 import json
+import re
 import logging
 import os
 import shutil
@@ -75,6 +76,8 @@ class ModelRegistry:
         """Loads model, scaler, and metrics given a version string (or 'latest')."""
         if version == "latest":
             version = self.get_latest_version()
+        if not re.fullmatch(r"v\d+", version):
+            raise FileNotFoundError(f"Invalid model version {version!r}")
 
         version_dir = self.base_dir / version
         if not version_dir.exists():

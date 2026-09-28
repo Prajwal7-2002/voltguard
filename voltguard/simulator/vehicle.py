@@ -8,6 +8,13 @@ from config.settings import cfg
 # Recommended-action keywords (see root_cause.analyzer) that command a load derate.
 _DERATE_KEYWORDS = ("derate", "limit", "reduce", "cut", "throttle")
 
+_FALLBACK_ROW = {
+    "ambient": 35.0, "coolant": 40.0, "u_d": -0.5, "u_q": -0.5,
+    "motor_speed": 1000.0, "torque": 15.0, "i_d": -1.0, "i_q": -1.0,
+    "pm": 30.0, "stator_yoke": 30.0, "stator_tooth": 35.0, "stator_winding": 40.0,
+    "profile_id": 4,
+}
+
 
 class VehicleSimulator:
     """
@@ -44,29 +51,8 @@ class VehicleSimulator:
         Returns the exact physical state from the Kaggle array at the current tick.
         Adds synthetic battery_temp and soc computations.
         """
-        if self.df is None:
-            # Fallback if the dataset isn't loaded properly
-            return {
-                "vehicle_id": self.vehicle_id,
-                "ambient": 35.0,
-                "coolant": 40.0,
-                "u_d": -0.5,
-                "u_q": -0.5,
-                "motor_speed": 1000.0,
-                "torque": 15.0,
-                "i_d": -1.0,
-                "i_q": -1.0,
-                "pm": 30.0,
-                "stator_yoke": 30.0,
-                "stator_tooth": 35.0,
-                "stator_winding": 40.0,
-                "profile_id": 4,
-                "battery_temp": 38.0,
-                "soc": self.soc,
-            }
-
-        # Get true physics from the dataset row
-        row = self.df.iloc[self.current_idx]
+        # Fall back to a fixed nominal row when the dataset isn't available (e.g. CI)
+        row = _FALLBACK_ROW if self.df is None else self.df.iloc[self.current_idx]
 
         # An active derate scales the commanded load. Temperatures are still
         # replayed from the dataset, so this models the setpoint, not thermal response.
