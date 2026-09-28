@@ -47,11 +47,7 @@ def classification_metrics(
         "test_f1_macro": float(report["macro avg"]["f1-score"]),
         "confusion_matrix": cm.astype(int).tolist(),
         "confusion_matrix_labels": label_names,
-        "per_class_report": {
-            label: report[label]
-            for label in label_names
-            if label in report
-        },
+        "per_class_report": {label: report[label] for label in label_names if label in report},
     }
 
     if y_prob is not None:
@@ -69,6 +65,7 @@ def classification_metrics(
             metrics["per_class_precision_recall"] = per_class_pr
 
     return metrics
+
 
 def evaluate_model(
     model: Any,
@@ -116,7 +113,10 @@ def evaluate_model(
     cm = np.array(metrics["confusion_matrix"])
     plt.figure(figsize=(6, 5))
     sns.heatmap(
-        cm, annot=True, fmt="d", cmap="Blues",
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
         xticklabels=metrics["confusion_matrix_labels"],
         yticklabels=metrics["confusion_matrix_labels"],
     )
@@ -130,10 +130,19 @@ def evaluate_model(
     logger.info("Saved confusion matrix to %s", cm_path)
 
     # SHAP Summary Plot
-    logger.info("Computing SHAP explanations for summary plot...")
-    explainer = shap.Explainer(model)
-    shap_values = explainer(x_test_scaled)
-    shap.summary_plot(shap_values, x_test_scaled, feature_names=feature_columns, show=False)
+    logger.info("Computing SHAP explanations for summary plot (sampled)...")
+    rng = np.random.RandomState(42)
+    sample = x_test_scaled[
+        rng.choice(len(x_test_scaled), min(2000, len(x_test_scaled)), replace=False)
+    ]
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(sample)
+    if isinstance(shap_values, list):  # older SHAP: one array per class
+        shap_values = shap_values[1]
+    elif np.ndim(shap_values) == 3:  # newer SHAP: (rows, features, classes)
+        shap_values = shap_values[:, :, 1]
+    # Class 1 (Stator Overheat) is the most common fault class.
+    shap.summary_plot(shap_values, sample, feature_names=feature_columns, show=False)
     shap_path = results_dir / "shap_summary.png"
     plt.savefig(shap_path, dpi=150, bbox_inches="tight")
     plt.close()

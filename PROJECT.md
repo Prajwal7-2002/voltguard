@@ -2,7 +2,7 @@
 
 ## What Is This?
 
-VoltGuard is a production-grade, real-time machine learning system that **predicts and prevents electric vehicle (EV) powertrain failures** before they cause hardware damage. It ingests live motor sensor telemetry, classifies fault types in milliseconds using XGBoost, explains predictions via SHAP, and autonomously executes corrective actions (throttling motors, activating cooling, adjusting charge states) in a closed control loop.
+VoltGuard is a real-time machine learning system that gives **early warning of thermal stress in EV traction motors** from electrical and control telemetry. It classifies each sensor tick with XGBoost, explains predictions via SHAP, recommends a corrective action, and in simulation closes the loop by derating the motor. See the README for measured performance and limitations.
 
 **Core problem it solves:** EVs fail catastrophically when thermal or electrical faults go undetected. VoltGuard makes EV powertrains self-healing.
 
@@ -52,9 +52,7 @@ d:/cdre-e2w/
 │   │   └── engine.py           # engineer_features(), generate_fault_codes()
 │   ├── root_cause/
 │   │   └── analyzer.py         # resolve_fault() — root cause + spare parts
-│   ├── self_heal/
-│   │   ├── agent.py            # take_action() — audit log + event publish
-│   │   └── effects.py          # apply_healing_effects() — state mutations
+│   ├── self_heal/              # LEGACY 3-class battery code, unused (pending removal)
 │   ├── simulator/
 │   │   ├── fleet.py            # FleetSimulator — multi-vehicle orchestration
 │   │   └── vehicle.py          # VehicleSimulator — CSV playback + sensors
@@ -95,9 +93,6 @@ d:/cdre-e2w/
 │       ├── scaler.pkl          # StandardScaler
 │       ├── metrics.json        # Accuracy, F1, CV scores
 │       └── baseline.json       # Mean/std for drift detection
-│
-├── logs/
-│   └── self_healing_log.jsonl  # Audit trail of all autonomous actions
 │
 ├── tests/                      # Pytest suite (API, simulator, MLOps)
 ├── notebooks/                  # EDA, experiments, SHAP analysis
@@ -159,25 +154,10 @@ root_cause = "Sustained High-RPM Stator Overheat"
 action     = "Derate motor torque by 40%. Part: Stator winding coil assembly"
 ```
 
-### 5. Self-Healing Agent (`voltguard/self_heal/agent.py` + `effects.py`)
-`take_action()` dispatches an action, publishes an event to the EventBus, and writes to the audit log. `apply_healing_effects()` mutates vehicle state:
+### 5. Closed-Loop Derate (`voltguard/simulator/vehicle.py`)
+When a prediction is non-nominal, `resolve_fault()` returns a recommended action. `VehicleSimulator.apply_effect()` treats load-reducing actions (derate, limit, reduce, cut, throttle) as a command: for `healing.derate_ticks` ticks it scales motor speed by `1 - throttle_rpm_reduction` and torque and current by `1 - throttle_current_reduction`. Temperatures are replayed from the dataset, so the derate changes the model's inputs, not the physical thermal response.
 
-```python
-# Cooling activated — reduces battery_temp by 2°C per tick for 5 ticks
-state["is_cooling"] = True
-state["cooling_ticks_remaining"] = 5
-```
-
-Every action is written to `logs/self_healing_log.jsonl`:
-```json
-{
-  "timestamp": "2025-01-10T14:32:15Z",
-  "vehicle_id": "v-001",
-  "fault_code": 1,
-  "root_cause": "Stator Thermal Stress",
-  "action_taken": "Reduce motor load"
-}
-```
+Every API prediction is written to the `prediction_logs` table, which is the audit trail.
 
 ### 6. Fleet Orchestration (`voltguard/simulator/fleet.py`)
 `FleetSimulator` runs N vehicles in parallel, calling the full pipeline each tick and returning structured results for the API and dashboard.
@@ -252,12 +232,18 @@ VOLTGUARD_CONFIG=/path/to/custom_thresholds.yaml
 
 ## Model Performance
 
-- **Test accuracy:** ~99% (98.84%) on **5-class fault classification** (Nominal, Stator Overheat, Battery Thermal Stress, Coolant System Failure, Inverter Over-Current). Profile-held-out validation: ~95% (prevents cross-contamination between driving profiles).
-  - **Macro F1:** 0.931 (better metric for imbalanced data: 1.2M nominal vs 558 battery thermal stress samples)
-  - **Per-class performance:** Macro Precision 0.933, Macro Recall 0.931
-- **Inference latency:** ~5ms per prediction (CPU, XGBoost)
-- **Drift detection:** Z-score comparison against `models/v1/baseline.json` (mean/std per feature)
-- **Known false positive:** High ambient temperature + sudden torque spike can trigger a spurious Stator Overheat (class 1) before coolant has actually failed. Mitigated by conservative threshold tuning.
+Measured on **14 held-out drive profiles** (309k rows). The model never saw them during training. See `models/v2/metrics.json` and `notebooks/04_evaluation.ipynb`.
+
+| Metric | Model v2 | Always "Nominal" |
+|---|---|---|
+| Macro F1 (evaluable classes) | 0.34 | 0.24 |
+| Macro F1, 5-fold drive-level CV | 0.45 ± 0.02 | — |
+| Accuracy | 0.90 | 0.96 |
+
+- Recall is highest for Coolant System Failure (0.66) and Stator Overheat (0.37). Precision is low (0.10–0.16), so expect many false alarms.
+- Inverter Over-Current is not learned (F1 0). Battery Thermal Stress occurs in only one drive and cannot be evaluated.
+- Earlier ~99% figures came from a random row split. At 2 Hz this leaks near-duplicate rows between train and test.
+- **Drift detection:** z-score comparison against `models/<version>/baseline.json` (mean/std per feature).
 
 ---
 
@@ -269,4 +255,5 @@ VOLTGUARD_CONFIG=/path/to/custom_thresholds.yaml
 | POST | `/predict/batch` | Batch predictions |
 | POST | `/predict/forecast` | Extrapolation-based early warning |
 | GET | `/vehicles/{id}/health` | Fleet health score |
-| WS | `/ws/alerts` | Real-time alert streaming |
+| GET | `/health` | Liveness/readiness probe |
+| WS | `/ws/alerts` | Alert stream (currently echoes client messages) |

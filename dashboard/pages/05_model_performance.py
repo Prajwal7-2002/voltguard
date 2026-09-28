@@ -44,10 +44,20 @@ prec = metric_value(metrics, "test_precision_macro", ["precision"])
 rec = metric_value(metrics, "test_recall_macro", ["recall"])
 cv_f1 = metric_value(metrics, "cv_f1_macro_mean")
 
+baseline = metrics.get("baseline_always_nominal") or {}
+base_acc = baseline.get("test_accuracy")
+base_f1 = baseline.get("test_f1_macro")
+
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Active Version", version)
-k2.metric("Accuracy", f"{acc:.4f}")
-k3.metric("Macro F1", f"{f1:.4f}")
+k2.metric(
+    "Accuracy", f"{acc:.4f}",
+    delta=f"{acc - base_acc:+.4f} vs always-Nominal" if base_acc is not None else None,
+)
+k3.metric(
+    "Macro F1", f"{f1:.4f}",
+    delta=f"{f1 - base_f1:+.4f} vs always-Nominal" if base_f1 is not None else None,
+)
 k4.metric("Macro Precision", f"{prec:.4f}")
 k5.metric("Macro Recall", f"{rec:.4f}")
 if cv_f1:
