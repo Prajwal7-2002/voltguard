@@ -58,6 +58,9 @@ results/
 # Jupyter
 .ipynb_checkpoints/
 
+# Test cache
+.pytest_cache/
+
 # Coverage
 htmlcov/
 .coverage
