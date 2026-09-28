@@ -53,6 +53,7 @@ results/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Jupyter
 .ipynb_checkpoints/
@@ -68,3 +69,6 @@ coverage.xml
 # ruff
 .ruff_cache/
 venv/
+
+# Local SQLite database (runtime state)
+*.db

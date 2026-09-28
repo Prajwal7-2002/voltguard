@@ -1,7 +1,7 @@
 # Makefile for VoltGuard
 # Usage: make <target>
 
-.PHONY: help install dev data train simulate test lint typecheck clean
+.PHONY: help install dev data train simulate test lint typecheck clean docker
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -46,5 +46,8 @@ clean:  ## Remove generated files
 	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache htmlcov
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	rm -f logs/self_healing_log.jsonl
+
+docker:  ## Build the API Docker image
+	docker build -t voltguard:latest .
 
 all: data train test  ## Generate data, train model, run tests
