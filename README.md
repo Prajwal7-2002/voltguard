@@ -1,183 +1,235 @@
-# ⚡ VoltGuard: EV Motor Thermal-Stress Early Warning
+# VoltGuard
 
-VoltGuard gives early warning of thermal stress in an EV traction motor using only
-electrical and control telemetry. It uses the **Paderborn University PMSM dataset**
-(1.33M rows sampled at 2 Hz across 69 drive profiles), classifies each tick with
-XGBoost, explains the result with SHAP, recommends a corrective action, and closes the
-loop in a simulator by derating the motor.
+VoltGuard tries to answer one question: can you tell that an EV motor is heading
+into thermal trouble just from its electrical and control signals, before the
+temperatures you can't measure directly get there?
 
-It ships as a FastAPI service with a prediction audit log, a Next.js dashboard
-that checks every alert against ground truth, a versioned model registry,
-feature-drift checks, Docker Compose, and CI.
+It's built on the [Paderborn University PMSM dataset](https://www.kaggle.com/datasets/wkirgsn/electric-motor-temperature):
+1.33 million readings, sampled at 2 Hz across 69 recorded drives of a permanent-magnet
+motor on a test bench. An XGBoost model looks at voltages, currents, speed, torque,
+coolant and ambient temperature, and flags when the motor looks stressed. SHAP explains
+each call, a small rules layer suggests what to do about it, and a simulator replays real
+drives so you can watch the whole loop run, including backing off the motor when
+an alert fires.
 
----
+Around that sits a FastAPI service, a Next.js dashboard, a versioned model registry,
+drift checks, Docker Compose and CI.
 
-## Results: read these before anything else
+## How well does it work?
 
-All metrics come from **whole drive profiles the model never saw during training**
-(`models/v2/metrics.json`). They sit next to a baseline that always predicts "Nominal",
-because about 91% of rows are Nominal.
+Honestly, modestly. Here are the numbers on 14 drives the model never saw during
+training, next to a "model" that always says everything is fine:
 
-| Held-out drives (14 profiles, 309k rows) | Model v2 | Always "Nominal" |
+| On unseen drives | VoltGuard (v2) | Always "Nominal" |
 |---|---|---|
-| Macro F1 (evaluable classes) | **0.34** | 0.24 |
-| Macro F1, 5-fold drive-level CV | **0.45 ± 0.02** | — |
+| Macro F1 | 0.34 | 0.24 |
+| Macro F1, cross-validated over drives | 0.45 ± 0.02 | – |
 | Accuracy | 0.90 | 0.96 |
 
-| Class | Precision | Recall | F1 | Drives containing it |
+| Condition | Precision | Recall | F1 | Drives it appears in |
 |---|---|---|---|---|
 | Nominal | 0.99 | 0.92 | 0.95 | 69 |
-| Stator Overheat | 0.16 | 0.37 | 0.22 | 39 |
-| Coolant System Failure | 0.10 | 0.66 | 0.17 | 25 |
-| Inverter Over-Current | 0.00 | 0.00 | 0.00 | 15 |
-| Battery Thermal Stress | not evaluable | | | 1 |
+| Stator overheat | 0.16 | 0.37 | 0.22 | 39 |
+| Coolant stress | 0.10 | 0.66 | 0.17 | 25 |
+| Inverter over-current | 0.00 | 0.00 | 0.00 | 15 |
+| Battery thermal stress | can't be evaluated | | | 1 |
 
-**How to read this.** The model is recall-oriented because of class-balanced training.
-It catches about two-thirds of coolant-stress ticks and a third of stator-overheat ticks
-on unseen drives, at the cost of many false alarms, so its accuracy is *below* the
-trivial baseline. It is an early-warning signal to combine with other checks, not a
-standalone fault detector.
+The model is deliberately tuned to catch stress rather than to be right on average. It
+picks up about two-thirds of coolant-stress moments and a third of stator overheating on
+drives it hasn't seen, but it raises a lot of false alarms along the way. That's why its
+accuracy is lower than the do-nothing baseline. Think of it as an early-warning signal
+you'd combine with other checks, not a fault detector you'd trust on its own.
 
-### Why earlier versions reported ~99%
-`models/v1` was evaluated on a **random row split**. At 2 Hz, neighbouring rows are
-near-duplicates, so every test drive also appeared in training, and v1 scored
-98.8% accuracy / 0.93 macro F1. When v1's training setup is re-run with whole drives held
-out, it scores 88–93% accuracy and 0.25–0.33 macro F1 across five splits. The always-Nominal
-baseline scores 88–93% and 0.19 on the same splits. v1 is kept for comparison; its
-`metrics.json` records the leaky split.
+### The 99% that wasn't
 
-### Limitations
-- **The labels are proxies.** The dataset has no fault annotations. A "fault" means a
-  hidden thermal channel (stator winding, tooth, yoke or magnet temperature, none of
-  which are model inputs) is in its top 3–6%. See `generate_fault_codes` in
+The first version of this project reported 98.8% accuracy and 0.93 macro F1. Those numbers
+were wrong. The test set was a random sample of rows, and at 2 Hz, neighbouring rows are
+practically identical, so every drive the model was "tested" on was also in its training
+data. When I re-ran the same setup with whole drives held out, it scored 88–93% accuracy
+and 0.25–0.33 macro F1, and the always-Nominal baseline scored 88–93% on the same splits.
+In other words, it had mostly learned to recognise drives, not stress.
+
+The current training code holds out entire drives, for both the test set and
+cross-validation, and records the baseline next to every result. The old `models/v1` is
+still in the repo for comparison. Its `metrics.json` says how it was evaluated.
+
+### Things to keep in mind
+
+- **The labels are stand-ins.** The dataset doesn't contain any real failures. A "fault" here
+  means one of the hidden motor temperatures (stator winding, tooth, yoke or magnet) is in
+  its top 3–6% for the dataset. The model never sees those temperatures, only the
+  electrical side. So "Coolant System Failure" really means "a pattern that looks like
+  coolant stress", not a broken pump. The labelling lives in `generate_fault_codes` in
   [voltguard/features/engine.py](voltguard/features/engine.py).
-- **"Battery Thermal Stress" occurs in only one drive**, so it can't be tested on an
-  unseen drive. `battery_temp` is also a synthetic feature derived from electrical power.
-- **Scores vary across drives.** With 14 test drives, treat the CV standard deviation as
-  the error bar.
-- **The simulator replays recorded temperatures**, so a derate changes the model's
-  inputs but not the physical thermal response.
+- **Battery thermal stress shows up in only one drive**, so there's nothing to test it on.
+  The `battery_temp` input is also made up from electrical power, not measured.
+- **With 14 test drives, results move around.** Use the cross-validation spread as your
+  error bar.
+- **The simulator replays recorded temperatures.** When it backs off the motor, the model's
+  inputs change but the replayed temperatures don't, so treat the effect as illustrative.
 
----
+## The dashboard
 
-## Architecture
+The Next.js app in `web/` has five pages:
+
+- **Overview**: what the system does, the headline numbers against the baseline, how rare
+  each condition is, and how stress is spread across drives.
+- **Live monitor**: replays one recorded drive through the real model. Every alert is
+  checked against what the hidden temperatures actually did, so you see hits, false
+  alarms and misses as they happen, along with the SHAP reasons and any back-off action.
+- **Fleet**: eight vehicles replaying different drives, with a heatmap of alerts and a
+  running count of how many turned out to be real.
+- **Explainability**: sliders for the eight inputs, set to realistic ranges from the data,
+  so you can poke at the model and see which inputs push it where.
+- **Model**: the full evaluation, per-condition results and a confusion matrix.
+
+There's also an older Streamlit app in `dashboard/`. I kept it as an internal tool for
+checking drift baselines and feature schemas. It isn't the main UI anymore.
+
+## How it fits together
 
 ```text
-browser ──► Next.js (web/) ──/api proxy──► FastAPI
-
-telemetry ──► FastAPI /predict ──► FaultPredictor (features → XGBoost → SHAP)
-                  │                        │
-                  │                        └─► root_cause.resolve_fault → recommended action
-                  ▼
-          PredictionLog + VehicleDB (SQLAlchemy; SQLite locally, PostgreSQL via DATABASE_URL)
-
-simulator: VehicleSimulator replays PMSM drives ─► predict ─► action ─► derate speed/torque/current
+browser ──► Next.js (web/) ──/api──► FastAPI (api/)
+                                        │
+                   ┌────────────────────┼─────────────────────┐
+                   ▼                    ▼                     ▼
+           FaultPredictor         simulator sessions     PredictionLog, vehicles
+     features → XGBoost → SHAP    replay real drives     (SQLite locally, Postgres
+                   │              + ground truth          via DATABASE_URL)
+                   ▼
+     root_cause → suggested action → derate in the simulator
 ```
 
-| Path | Responsibility |
+| Folder | What's in it |
 |---|---|
-| `api/` | FastAPI app: prediction, batch, forecast, fleet health, model metadata, `/health` |
-| `voltguard/features/` | Feature engineering and proxy label generation |
-| `voltguard/diagnostics/` | Training (`trainer.py`), evaluation, registry, predictor, drift |
-| `voltguard/root_cause/` | Maps fault class and SHAP evidence to root cause and action |
-| `voltguard/simulator/` | PMSM replay with a closed-loop derate effect |
-| `voltguard/database/` | ORM models and session management |
-| `web/` | Next.js dashboard: overview, live monitor, fleet, explainability, model report |
-| `api/routes/simulator.py` | Replay sessions that return predictions next to proxy ground truth |
-| `dashboard/` | Streamlit app, kept as an internal ML debugging tool (drift, feature checks) |
-| `models/vN/` | Versioned artifacts; `models/latest.txt` selects the served version |
+| `api/` | The FastAPI app. `routes/simulator.py` runs the replay sessions the dashboard uses |
+| `web/` | The Next.js dashboard |
+| `voltguard/features/` | Feature engineering and the proxy labels |
+| `voltguard/diagnostics/` | Training, evaluation, the model registry, prediction and drift checks |
+| `voltguard/root_cause/` | Turns a prediction and its SHAP values into a likely cause and an action |
+| `voltguard/simulator/` | Replays the dataset and applies back-off actions |
+| `voltguard/database/` | Database models and sessions |
+| `models/vN/` | Trained models. `models/latest.txt` picks the one the API serves |
+| `dashboard/` | The internal Streamlit tool |
 
-**Design choices**
-- **XGBoost on engineered tabular features**, not a sequence model: CPU inference in
-  milliseconds and native SHAP support. Short-term dynamics come from diff features
-  (`dt_dt`, `acceleration_gradient`) computed over a rolling per-vehicle buffer.
-- **Labels are built from channels the model cannot see.** This avoids the obvious
-  leakage of predicting a temperature from itself.
-- **Every prediction is audited**: each `/predict` call writes a `PredictionLog` row and
-  updates that vehicle's health score and active faults.
+A few decisions worth explaining:
 
----
+- **XGBoost on tabular features rather than a sequence model.** It runs in milliseconds
+  on a CPU and SHAP supports it natively. Short-term trends come from rate-of-change
+  features computed over a small rolling buffer per vehicle.
+- **The labels come from signals the model can't see.** Otherwise it would just be
+  predicting a temperature from itself.
+- **Every prediction is logged.** Each call to `/predict` writes a row to the audit table and
+  updates that vehicle's health score.
 
-## Quickstart
+## Running it
 
-### Option A: everything in Docker
+### With Docker
+
 ```bash
-docker compose up --build        # dashboard http://localhost:3000, API http://localhost:8000/docs
+docker compose up --build
 ```
-To replay real drives with ground truth, first put the dataset in `data/` (see below).
 
-### Option B: local development
+The dashboard is at http://localhost:3000 and the API docs are at http://localhost:8000/docs.
+
+### Locally
+
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate          # on Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env
-uvicorn api.main:app --reload                       # API on :8000, uses the committed model v2
-
-cd web && pnpm install && pnpm dev                  # dashboard on :3000
+uvicorn api.main:app --reload      # API on :8000, serves the committed model v2
 ```
 
-### The replay dataset (optional, needed for the simulator's ground truth)
-Download the [PMSM temperature dataset](https://www.kaggle.com/datasets/wkirgsn/electric-motor-temperature)
-and save `measures_v2.csv` as `data/comprehensive_fault_training_data.csv`. Without it the
-dashboard still works, but the simulator replays a placeholder reading with no ground truth.
+In a second terminal:
 
-### Retrain
 ```bash
-python scripts/train.py                 # writes models/vN and updates models/latest.txt
-python scripts/generate_evaluation.py   # regenerates notebooks/04_evaluation.ipynb
+cd web
+pnpm install
+pnpm dev                           # dashboard on :3000
 ```
 
-### Internal tools
+### Getting the dataset
+
+The model ships with the repo, so the API and most of the dashboard work without the
+data. The simulator needs it for ground truth, though. Download `measures_v2.csv` from
+[Kaggle](https://www.kaggle.com/datasets/wkirgsn/electric-motor-temperature) and save it
+as `data/comprehensive_fault_training_data.csv`. Without it, the simulator replays a
+fixed placeholder reading and can't tell you whether an alert was right.
+
+### Retraining
+
 ```bash
-streamlit run dashboard/app.py          # ML debugging views (drift baseline, feature contract)
-python scripts/simulate.py --vehicles 3 --ticks 20
+python scripts/train.py                 # saves models/vN and points latest.txt at it
+python scripts/generate_evaluation.py   # rebuilds notebooks/04_evaluation.ipynb from the new metrics
 ```
 
----
+### Other tools
+
+```bash
+streamlit run dashboard/app.py                         # drift and feature-schema checks
+python scripts/simulate.py --vehicles 3 --ticks 20     # terminal version of the simulator
+```
+
+### If something goes wrong on Windows
+
+If the API starts but fails with a DLL or "Application Control policy" error the first time
+it loads the model, that's Windows Smart App Control blocking native libraries such as
+pyarrow and numba. Turning it off (Windows Security → App & browser control) or running with
+Docker gets around it.
 
 ## API
 
-| Method | Path | Description |
+| Method | Path | What it does |
 |---|---|---|
-| POST | `/predict` | Classify one reading; logged to `prediction_logs` |
-| POST | `/predict/batch` | 1–1000 readings, all-or-nothing |
-| POST | `/predict/forecast` | Trend-extrapolated early warning |
-| POST | `/predict/explain` | Score one what-if scenario in isolation (no logging, no history) |
-| POST | `/simulator/sessions` | Start a replay session with 1–12 vehicles |
-| POST | `/simulator/sessions/{id}/tick` | Advance 1–200 ticks; returns prediction, ground truth, action, derate state |
-| DELETE | `/simulator/sessions/{id}` | End a session |
-| GET | `/data/summary` | Class balance, per-drive stress rates, input ranges |
+| POST | `/predict` | Classifies one reading and logs it |
+| POST | `/predict/batch` | Classifies 1–1000 readings. All of them succeed or none are saved |
+| POST | `/predict/forecast` | Extrapolates recent trends and predicts a few ticks ahead |
+| POST | `/predict/explain` | Scores one what-if scenario without logging or remembering it |
+| POST | `/simulator/sessions` | Starts a replay with 1–12 vehicles |
+| POST | `/simulator/sessions/{id}/tick` | Advances 1–200 ticks and returns predictions, ground truth and actions |
+| DELETE | `/simulator/sessions/{id}` | Ends a replay |
+| GET | `/data/summary` | Class balance, stress per drive, and input ranges |
 | GET | `/vehicles` | Fleet health overview |
 | GET | `/vehicles/{id}/health` | Health of one vehicle |
-| GET | `/models/latest`, `/models/{version}` | Model metrics |
-| GET | `/health` | Liveness/readiness (database reachable) |
-| WS | `/ws/alerts` | Alert stream (currently echoes client messages) |
+| GET | `/models/latest`, `/models/{version}` | Metrics for a model version |
+| GET | `/health` | Checks the API and database are up |
+| WS | `/ws/alerts` | Alert stream. For now it only echoes messages back |
 
 ## Configuration
 
-| Variable | Default | Purpose |
+| Variable | Default | What it's for |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///./voltguard.db` | Any SQLAlchemy URL |
-| `VOLTGUARD_CORS_ORIGINS` | `http://localhost:3000,http://localhost:8501` | Comma-separated allowed origins |
-| `VOLTGUARD_REPLAY_DATA` | `data/comprehensive_fault_training_data.csv` | Dataset the simulator replays |
-| `VOLTGUARD_API_URL` (web) | `http://localhost:8000` | Where the Next.js `/api` proxy forwards requests |
-| `VOLTGUARD_ENABLE_DEMO_ENDPOINTS` | `0` | Set to `1` to enable `POST /vehicles/_seed_mock_fleet`, which wipes the fleet table |
-| `VOLTGUARD_CONFIG` | `config/thresholds.yaml` | Thresholds and model hyperparameters |
+| `DATABASE_URL` | `sqlite:///./voltguard.db` | Any SQLAlchemy database URL |
+| `VOLTGUARD_CORS_ORIGINS` | `http://localhost:3000,http://localhost:8501` | Browser origins allowed to call the API |
+| `VOLTGUARD_REPLAY_DATA` | `data/comprehensive_fault_training_data.csv` | The dataset the simulator replays |
+| `VOLTGUARD_API_URL` | `http://localhost:8000` | Set on the web app: where its `/api` proxy sends requests |
+| `VOLTGUARD_ENABLE_DEMO_ENDPOINTS` | `0` | Set to `1` to allow `POST /vehicles/_seed_mock_fleet`, which wipes and reseeds the fleet table |
+| `VOLTGUARD_CONFIG` | `config/thresholds.yaml` | Thresholds and model settings |
+
+Relative paths are resolved from the project folder, so it doesn't matter where you start
+the API from.
 
 ## Development
 
 ```bash
-make test     # pytest with coverage
-make lint     # ruff
-make format   # ruff format
+make test        # Python tests with coverage
+make lint        # ruff
+make format      # ruff format
 cd web && pnpm lint && pnpm typecheck && pnpm build
 ```
-CI (`.github/workflows/ci.yml`) runs Python lint and tests on 3.10 and 3.12, web lint,
-type-check and build, then builds both Docker images and smoke-tests the API's `/health`.
 
-## Roadmap
-- Database migrations (Alembic) instead of `create_all` at startup
-- Authentication on write endpoints
-- Connect `/ws/alerts` to the internal event bus
-- Persist the per-vehicle feature buffer and simulator sessions (currently in process memory, one worker only)
-- Save models in XGBoost's native JSON format instead of pickle
+The tests don't need the 300 MB dataset. They generate a tiny fake one instead. CI runs the
+Python tests on 3.10 and 3.12, lints, type-checks and builds the web app, then builds both
+Docker images and checks that the API comes up.
+
+## What's next
+
+- Database migrations with Alembic instead of creating tables at startup
+- Authentication on the endpoints that write data
+- Hooking `/ws/alerts` up to real events
+- Moving the per-vehicle buffers and simulator sessions out of process memory, so the API
+  can run with more than one worker
+- Saving models in XGBoost's JSON format instead of pickle
+- Better labels. A dataset with real recorded failures would make most of the caveats above go away
