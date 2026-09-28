@@ -15,58 +15,49 @@ an alert fires.
 Around that sits a FastAPI service, a Next.js dashboard, a versioned model registry,
 drift checks, Docker Compose and CI.
 
-## How well does it work?
+## Results
 
-Honestly, modestly. Here are the numbers on 14 drives the model never saw during
-training, next to a "model" that always says everything is fine:
+Tested on 14 drives that were held out of training (309k rows). The baseline is a model
+that predicts "Nominal" for every row.
 
-| On unseen drives | VoltGuard (v2) | Always "Nominal" |
+| Metric | Model v2 | Baseline |
 |---|---|---|
 | Macro F1 | 0.34 | 0.24 |
-| Macro F1, cross-validated over drives | 0.45 ± 0.02 | – |
+| Macro F1, 5-fold CV over drives | 0.45 ± 0.02 | – |
 | Accuracy | 0.90 | 0.96 |
 
-| Condition | Precision | Recall | F1 | Drives it appears in |
+| Class | Precision | Recall | F1 | Drives with this class |
 |---|---|---|---|---|
 | Nominal | 0.99 | 0.92 | 0.95 | 69 |
 | Stator overheat | 0.16 | 0.37 | 0.22 | 39 |
 | Coolant stress | 0.10 | 0.66 | 0.17 | 25 |
 | Inverter over-current | 0.00 | 0.00 | 0.00 | 15 |
-| Battery thermal stress | can't be evaluated | | | 1 |
+| Battery thermal stress | – | – | – | 1 |
 
-The model is deliberately tuned to catch stress rather than to be right on average. It
-picks up about two-thirds of coolant-stress moments and a third of stator overheating on
-drives it hasn't seen, but it raises a lot of false alarms along the way. That's why its
-accuracy is lower than the do-nothing baseline. Think of it as an early-warning signal
-you'd combine with other checks, not a fault detector you'd trust on its own.
+Training uses balanced class weights, so the model favours recall over precision. On
+unseen drives it catches 66% of coolant-stress rows and 37% of stator-overheat rows, but
+most of its alerts are false alarms, and its accuracy ends up below the baseline. It
+never predicts inverter over-current correctly. Battery thermal stress only appears in one
+drive, so it can't be tested and is left out of the macro scores.
 
-### The 99% that wasn't
+v1 of this model reported 98.8% accuracy and 0.93 macro F1. That came from a random row
+split. The data is sampled at 2 Hz, so neighbouring rows are almost identical, and every
+test drive had rows in the training set too. With whole drives held out, the same setup
+scores 88–93% accuracy and 0.25–0.33 macro F1 across five splits, against 88–93% and 0.19
+for the baseline. The training code now splits by drive for both the test set and
+cross-validation. `models/v1` is kept for comparison.
 
-The first version of this project reported 98.8% accuracy and 0.93 macro F1. Those numbers
-were wrong. The test set was a random sample of rows, and at 2 Hz, neighbouring rows are
-practically identical, so every drive the model was "tested" on was also in its training
-data. When I re-ran the same setup with whole drives held out, it scored 88–93% accuracy
-and 0.25–0.33 macro F1, and the always-Nominal baseline scored 88–93% on the same splits.
-In other words, it had mostly learned to recognise drives, not stress.
+### Limitations
 
-The current training code holds out entire drives, for both the test set and
-cross-validation, and records the baseline next to every result. The old `models/v1` is
-still in the repo for comparison. Its `metrics.json` says how it was evaluated.
-
-### Things to keep in mind
-
-- **The labels are stand-ins.** The dataset doesn't contain any real failures. A "fault" here
-  means one of the hidden motor temperatures (stator winding, tooth, yoke or magnet) is in
-  its top 3–6% for the dataset. The model never sees those temperatures, only the
-  electrical side. So "Coolant System Failure" really means "a pattern that looks like
-  coolant stress", not a broken pump. The labelling lives in `generate_fault_codes` in
-  [voltguard/features/engine.py](voltguard/features/engine.py).
-- **Battery thermal stress shows up in only one drive**, so there's nothing to test it on.
-  The `battery_temp` input is also made up from electrical power, not measured.
-- **With 14 test drives, results move around.** Use the cross-validation spread as your
-  error bar.
-- **The simulator replays recorded temperatures.** When it backs off the motor, the model's
-  inputs change but the replayed temperatures don't, so treat the effect as illustrative.
+- There are no real failures in the dataset. The labels are thresholds on the hidden
+  temperatures (stator winding, tooth, yoke and magnet): a row counts as a fault when one of
+  them is in its top 3–6%. The model doesn't get these temperatures as inputs. "Coolant
+  System Failure" means the row looks like coolant stress, not that a part failed. See
+  `generate_fault_codes` in [voltguard/features/engine.py](voltguard/features/engine.py).
+- `battery_temp` isn't measured. It's calculated from electrical power.
+- 14 test drives is a small sample. Use the CV standard deviation as the error bar.
+- The simulator replays recorded temperatures. A derate changes the model's inputs but not
+  the temperatures that follow.
 
 ## The dashboard
 
