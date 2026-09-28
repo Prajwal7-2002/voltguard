@@ -33,7 +33,7 @@ class PredictResponse(BaseModel):
 
 class BatchPredictRequest(BaseModel):
     """Batch of sensor readings for scoring."""
-    readings: List[SensorReading]
+    readings: List[SensorReading] = Field(..., min_length=1, max_length=1000)
 
 class BatchPredictResponse(BaseModel):
     """Results for a batch of readings."""

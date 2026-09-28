@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import shap
 
 from voltguard.core.logging import get_logger
 from voltguard.features.engine import ALL_FEATURES, engineer_features, FAULT_LABELS
@@ -31,6 +30,8 @@ class FaultPredictor:
     def __init__(self, version: str = "latest") -> None:
         self.registry = ModelRegistry()
         self.model, self.scaler, self.metrics, self.baseline = self.registry.load(version)
+        import shap  # heavy import (numba); defer until a model is actually loaded
+
         self.explainer = shap.TreeExplainer(self.model)
 
         # Dictionary mapping vehicle_id -> rolling DataFrame history

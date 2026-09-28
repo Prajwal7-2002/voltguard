@@ -58,3 +58,27 @@ def test_soc_drains_over_time():
         sim.tick()
     # SOC should have decreased (unless power draw was exactly 0 for all ticks)
     assert sim.soc <= initial_soc
+
+
+def test_derate_action_reduces_load_then_expires():
+    """A load-reducing action scales speed/torque/current for derate_ticks ticks."""
+    from config.settings import cfg
+
+    sim = VehicleSimulator("v-derate")
+    baseline = sim.get_state()
+
+    assert sim.apply_effect("Derate motor torque by 40%. Part: Stator winding coil assembly")
+    derated = sim.get_state()
+    assert derated["derated"] is True
+    assert derated["motor_speed"] == baseline["motor_speed"] * (1 - cfg.healing.throttle_rpm_reduction)
+    assert derated["i_q"] == baseline["i_q"] * (1 - cfg.healing.throttle_current_reduction)
+
+    for _ in range(cfg.healing.derate_ticks):
+        sim.tick()
+    assert sim.get_state()["derated"] is False
+
+
+def test_non_load_action_does_not_derate():
+    sim = VehicleSimulator("v-derate")
+    assert not sim.apply_effect("Schedule coolant system check. Part: Radiator")
+    assert sim.get_state()["derated"] is False

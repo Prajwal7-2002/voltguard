@@ -14,7 +14,7 @@ def get_latest_model():
         _, _, metrics, _ = registry.load(latest_version)
         return ModelMetricsResponse(version=latest_version, metrics=metrics)
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Latest model not found: {str(e)}")
+        raise HTTPException(status_code=404, detail="Latest model not found.") from e
 
 @router.get("/{version}", response_model=ModelMetricsResponse)
 def get_model_by_version(version: str):
@@ -23,7 +23,7 @@ def get_model_by_version(version: str):
         _, _, metrics, _ = registry.load(version)
         return ModelMetricsResponse(version=version, metrics=metrics)
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Model version {version} not found: {str(e)}")
+        raise HTTPException(status_code=404, detail=f"Model version {version} not found.") from e
 
 @router.get("/{version}/drift")
 def get_model_drift_status(version: str):
@@ -36,5 +36,5 @@ def get_model_drift_status(version: str):
         detector = DriftDetector(version=version)
         return {"version": version, "drift_capable": bool(detector.baseline)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Drift logic failure: {str(e)}")
+        raise HTTPException(status_code=500, detail="Drift check failed.") from e
 

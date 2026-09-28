@@ -48,6 +48,7 @@ class HealingParams(BaseModel):
     cooling_duration: int = 5
     throttle_rpm_reduction: float = 0.3
     throttle_current_reduction: float = 0.4
+    derate_ticks: int = 10
     recharge_soc_rate: float = 5.0
     preheat_rate: float = 1.5
 

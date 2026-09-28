@@ -37,6 +37,7 @@ healing:
   cooling_duration: 5          # Number of ticks cooling stays active
   throttle_rpm_reduction: 0.3  # Fraction to reduce RPM by
   throttle_current_reduction: 0.4
+  derate_ticks: 10             # Ticks a derate stays active after a fault action
   recharge_soc_rate: 5.0       # SOC % increase per tick when charging
   preheat_rate: 1.5            # °C increase per tick when preheating
 

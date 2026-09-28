@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+import os
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from api.schemas import VehicleHealthResponse, FleetHealthResponse
-from datetime import datetime
+
+from api.schemas import FleetHealthResponse, VehicleHealthResponse
 
 from voltguard.database.config import get_db
 from voltguard.database.models import VehicleDB
@@ -17,7 +20,7 @@ def get_fleet_overview(db: Session = Depends(get_db)):
     
     for v_db in vehicles_db:
         # Resolve time format safely
-        last_run = v_db.last_reading_time.isoformat() if v_db.last_reading_time else datetime.utcnow().isoformat()
+        last_run = v_db.last_reading_time.isoformat() if v_db.last_reading_time else datetime.now(timezone.utc).isoformat()
         
         v = VehicleHealthResponse(
             vehicle_id=v_db.id,
@@ -44,7 +47,7 @@ def get_vehicle_health(vehicle_id: str, db: Session = Depends(get_db)):
     if not v_db:
         raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found in database.")
         
-    last_run = v_db.last_reading_time.isoformat() if v_db.last_reading_time else datetime.utcnow().isoformat()
+    last_run = v_db.last_reading_time.isoformat() if v_db.last_reading_time else datetime.now(timezone.utc).isoformat()
     return VehicleHealthResponse(
         vehicle_id=v_db.id,
         health_score=v_db.health_score,
@@ -52,9 +55,15 @@ def get_vehicle_health(vehicle_id: str, db: Session = Depends(get_db)):
         last_reading_time=last_run
     )
 
-@router.post("/_seed_mock_fleet")
+def require_demo_endpoints() -> None:
+    """Hide destructive demo routes unless VOLTGUARD_ENABLE_DEMO_ENDPOINTS=1."""
+    if os.getenv("VOLTGUARD_ENABLE_DEMO_ENDPOINTS") != "1":
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+@router.post("/_seed_mock_fleet", dependencies=[Depends(require_demo_endpoints)])
 def seed_mock_fleet(db: Session = Depends(get_db)):
-    """Internal method to seed the database with mock EVs for the portfolio demo."""
+    """Demo only: replace all vehicles with a fixed mock fleet."""
     # Delete old seeded anomalies if testing reset
     db.query(VehicleDB).delete()
     

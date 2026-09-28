@@ -1,6 +1,12 @@
 import random
+from typing import Any, Dict
+
 import pandas as pd
-from typing import Dict, Any
+
+from config.settings import cfg
+
+# Recommended-action keywords (see root_cause.analyzer) that command a load derate.
+_DERATE_KEYWORDS = ("derate", "limit", "reduce", "cut", "throttle")
 
 
 class VehicleSimulator:
@@ -12,6 +18,7 @@ class VehicleSimulator:
     def __init__(self, vehicle_id: str):
         self.vehicle_id = vehicle_id
         self.soc = 100.0  # Start with full charge
+        self.derate_ticks_remaining = 0
 
         # Load the physical Kaggle dataset into memory for this vehicle
         try:
@@ -61,11 +68,18 @@ class VehicleSimulator:
         # Get true physics from the dataset row
         row = self.df.iloc[self.current_idx]
 
+        # An active derate scales the commanded load. Temperatures are still
+        # replayed from the dataset, so this models the setpoint, not thermal response.
+        speed_factor, current_factor = 1.0, 1.0
+        if self.derate_ticks_remaining > 0:
+            speed_factor = 1 - cfg.healing.throttle_rpm_reduction
+            current_factor = 1 - cfg.healing.throttle_current_reduction
+
         # Compute synthetic battery temperature from power draw
         u_d = float(row.get("u_d", 0))
         u_q = float(row.get("u_q", 0))
-        i_d = float(row.get("i_d", 0))
-        i_q = float(row.get("i_q", 0))
+        i_d = float(row.get("i_d", 0)) * current_factor
+        i_q = float(row.get("i_q", 0)) * current_factor
         ambient = float(row.get("ambient", 35.0))
 
         power_draw = (u_d * i_d) + (u_q * i_q)
@@ -83,8 +97,8 @@ class VehicleSimulator:
             "coolant": float(row.get("coolant", 40.0)),
             "u_d": u_d,
             "u_q": u_q,
-            "motor_speed": float(row.get("motor_speed", 1000.0)),
-            "torque": float(row.get("torque", 0)),
+            "motor_speed": float(row.get("motor_speed", 1000.0)) * speed_factor,
+            "torque": float(row.get("torque", 0)) * current_factor,
             "i_d": i_d,
             "i_q": i_q,
             "pm": float(row.get("pm", 30.0)),
@@ -95,6 +109,7 @@ class VehicleSimulator:
             "battery_temp": round(battery_temp, 2),
             "soc": round(self.soc, 2),
             "power_draw": round(power_draw, 2),
+            "derated": self.derate_ticks_remaining > 0,
         }
         return state
 
@@ -103,13 +118,17 @@ class VehicleSimulator:
         state = self.get_state()
         if self.df is not None:
             self.current_idx = (self.current_idx + 1) % len(self.df)
+        if self.derate_ticks_remaining > 0:
+            self.derate_ticks_remaining -= 1
         return state
 
-    def apply_effect(self, action: str):
+    def apply_effect(self, action: str) -> bool:
+        """Apply a recommended action to the playback.
+
+        Load-reducing actions derate motor speed, torque and current for
+        ``cfg.healing.derate_ticks`` ticks. Returns True if a derate was applied.
         """
-        Intervenes in the playback to simulate self-healing.
-        If we detect a fault, we can partially restore SOC or skip ahead.
-        """
-        # Simulate a partial recovery effect
-        if "throttle" in action.lower() or "reduce" in action.lower():
-            self.soc = min(100.0, self.soc + 0.5)  # Slight recovery from reduced load
+        if any(k in action.lower() for k in _DERATE_KEYWORDS):
+            self.derate_ticks_remaining = cfg.healing.derate_ticks
+            return True
+        return False

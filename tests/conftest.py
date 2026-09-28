@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -35,7 +37,20 @@ def override_get_db():
 # Override FastAPI dependencies to securely route to the fake test db
 app.dependency_overrides[get_db] = override_get_db
 
+# The mock-fleet seed route is opt-in; the fleet tests rely on it.
+os.environ.setdefault("VOLTGUARD_ENABLE_DEMO_ENDPOINTS", "1")
+
+
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def db_session():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
