@@ -1,5 +1,5 @@
 import random
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -9,9 +9,18 @@ from config.settings import cfg
 _DERATE_KEYWORDS = ("derate", "limit", "reduce", "cut", "throttle")
 
 _FALLBACK_ROW = {
-    "ambient": 35.0, "coolant": 40.0, "u_d": -0.5, "u_q": -0.5,
-    "motor_speed": 1000.0, "torque": 15.0, "i_d": -1.0, "i_q": -1.0,
-    "pm": 30.0, "stator_yoke": 30.0, "stator_tooth": 35.0, "stator_winding": 40.0,
+    "ambient": 35.0,
+    "coolant": 40.0,
+    "u_d": -0.5,
+    "u_q": -0.5,
+    "motor_speed": 1000.0,
+    "torque": 15.0,
+    "i_d": -1.0,
+    "i_q": -1.0,
+    "pm": 30.0,
+    "stator_yoke": 30.0,
+    "stator_tooth": 35.0,
+    "stator_winding": 40.0,
     "profile_id": 4,
 }
 
@@ -22,6 +31,7 @@ class VehicleSimulator:
     Reads sequentially from the Kaggle dataset to fake a live motor stream.
     Computes synthetic battery_temp and soc on each tick.
     """
+
     def __init__(self, vehicle_id: str):
         self.vehicle_id = vehicle_id
         self.soc = 100.0  # Start with full charge
@@ -33,8 +43,8 @@ class VehicleSimulator:
             # Start near a fault-prone region so the dashboard shows realistic variety
             # Find rows with high current or high coolant (fault-adjacent zones)
             high_stress = self.df[
-                (self.df["i_q"].abs() > self.df["i_q"].quantile(0.85)) |
-                (self.df["coolant"] > self.df["coolant"].quantile(0.85))
+                (self.df["i_q"].abs() > self.df["i_q"].quantile(0.85))
+                | (self.df["coolant"] > self.df["coolant"].quantile(0.85))
             ]
             if len(high_stress) > 100:
                 # Start 50 rows before a high-stress region (to show transition)
@@ -46,7 +56,7 @@ class VehicleSimulator:
             self.df = None
             self.current_idx = 0
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """
         Returns the exact physical state from the Kaggle array at the current tick.
         Adds synthetic battery_temp and soc computations.
@@ -99,7 +109,7 @@ class VehicleSimulator:
         }
         return state
 
-    def tick(self) -> Dict[str, Any]:
+    def tick(self) -> dict[str, Any]:
         """Advances the playback by 1 row mimicking real time."""
         state = self.get_state()
         if self.df is not None:

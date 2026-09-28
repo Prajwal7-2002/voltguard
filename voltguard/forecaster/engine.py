@@ -59,7 +59,7 @@ class FaultForecaster:
             }
 
         recent = history_df.tail(3)
-        numeric_keys = [k for k in cleaned_input.keys() if k in recent.columns]
+        numeric_keys = [k for k in cleaned_input if k in recent.columns]
 
         if not numeric_keys:
             return {

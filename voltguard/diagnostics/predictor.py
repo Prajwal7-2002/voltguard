@@ -7,14 +7,12 @@ time-series (lag) features on the fly.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
 from voltguard.core.logging import get_logger
-from voltguard.features.engine import ALL_FEATURES, engineer_features, FAULT_LABELS
 from voltguard.diagnostics.registry import ModelRegistry
+from voltguard.features.engine import ALL_FEATURES, FAULT_LABELS, engineer_features
 
 logger = get_logger(__name__)
 
@@ -103,6 +101,7 @@ class FaultPredictor:
 # ---------------------------------------------------------------------------
 # Convenience function (backward-compatible)
 # ---------------------------------------------------------------------------
+
 
 def load_model_and_scaler(version: str = "latest"):
     """Legacy loader — prefer FaultPredictor class instead."""

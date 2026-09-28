@@ -42,16 +42,16 @@ def resolve_fault(
         if motor_speed > 4000 and coolant > 50:
             return (
                 "Sustained High-RPM Stator Overheat",
-                "Derate motor torque by 40%. Part: Stator winding coil assembly"
+                "Derate motor torque by 40%. Part: Stator winding coil assembly",
             )
         if dominant_feature == "torque":
             return (
                 "Excessive Torque Load on Stator",
-                "Limit peak torque output. Part: Stator winding coil assembly"
+                "Limit peak torque output. Part: Stator winding coil assembly",
             )
         return (
             "Stator Thermal Stress (General)",
-            "Reduce motor load. Part: Copper winding assembly + thermal paste"
+            "Reduce motor load. Part: Copper winding assembly + thermal paste",
         )
 
     # ── Code 2: Battery Thermal Stress ────────────────────────────────────
@@ -62,16 +62,16 @@ def resolve_fault(
         if ambient > 40:
             return (
                 "Battery Overheating (Indian Summer Conditions)",
-                "Throttle discharge rate by 60%. Part: Battery thermal pad + cooling fan"
+                "Throttle discharge rate by 60%. Part: Battery thermal pad + cooling fan",
             )
         if abs(power) > 500:
             return (
                 "Battery Thermal Stress from High Power Draw",
-                "Reduce acceleration intensity. Part: Battery cell thermal management kit"
+                "Reduce acceleration intensity. Part: Battery cell thermal management kit",
             )
         return (
             "Battery Thermal Anomaly",
-            "Schedule battery thermal paste inspection. Part: Thermal interface material"
+            "Schedule battery thermal paste inspection. Part: Thermal interface material",
         )
 
     # ── Code 3: Coolant System Failure ────────────────────────────────────
@@ -82,16 +82,16 @@ def resolve_fault(
         if coolant > 80:
             return (
                 "Critical Coolant Pump Failure",
-                "Activate backup pump immediately. Part: Coolant pump unit + radiator flush kit"
+                "Activate backup pump immediately. Part: Coolant pump unit + radiator flush kit",
             )
         if motor_speed < 100:
             return (
                 "Coolant Stagnation (Pump Dead at Idle)",
-                "Alert maintenance crew. Part: Coolant pump motor + flow sensor"
+                "Alert maintenance crew. Part: Coolant pump motor + flow sensor",
             )
         return (
             "Cooling System Degradation",
-            "Schedule coolant system check. Part: Radiator + coolant hose assembly"
+            "Schedule coolant system check. Part: Radiator + coolant hose assembly",
         )
 
     # ── Code 4: Inverter Over-Current ─────────────────────────────────────
@@ -102,11 +102,11 @@ def resolve_fault(
         if abs(i_q) > abs(i_d):
             return (
                 "Inverter Over-Current (Q-axis Spike)",
-                "Cut inverter current limits. Part: IGBT power module"
+                "Cut inverter current limits. Part: IGBT power module",
             )
         return (
             "Inverter Over-Current (D-axis Spike)",
-            "Reduce regenerative braking intensity. Part: IGBT module + DC-link capacitor"
+            "Reduce regenerative braking intensity. Part: IGBT module + DC-link capacitor",
         )
 
     return "Unknown Fault Code", "Needs manual review"

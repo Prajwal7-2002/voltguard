@@ -9,7 +9,6 @@ from typing import Any
 import yaml
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Resolve the path to thresholds.yaml relative to this file, so it works
 # regardless of the working directory.
@@ -21,6 +20,7 @@ _DEFAULT_THRESHOLDS_PATH = _CONFIG_DIR / "thresholds.yaml"
 # ---------------------------------------------------------------------------
 # Pydantic models — typed, validated, auto-documented
 # ---------------------------------------------------------------------------
+
 
 class BatteryThresholds(BaseModel):
     soc_low: float = 25.0
@@ -81,6 +81,7 @@ class VoltGuardConfig(BaseModel):
 # Loader
 # ---------------------------------------------------------------------------
 
+
 def load_config(path: str | Path | None = None) -> VoltGuardConfig:
     """Load configuration from a YAML file.
 
@@ -93,7 +94,7 @@ def load_config(path: str | Path | None = None) -> VoltGuardConfig:
     path = Path(path)
 
     if path.exists():
-        with open(path, "r") as fh:
+        with open(path) as fh:
             raw: dict[str, Any] = yaml.safe_load(fh) or {}
         return VoltGuardConfig(**raw)
 

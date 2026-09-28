@@ -13,10 +13,23 @@ def test_simulator_returns_pmsm_fields():
     reading = sim.tick()
 
     expected_keys = [
-        "vehicle_id", "ambient", "coolant", "u_d", "u_q",
-        "motor_speed", "torque", "i_d", "i_q", "pm",
-        "stator_yoke", "stator_tooth", "stator_winding", "profile_id",
-        "battery_temp", "soc", "power_draw",
+        "vehicle_id",
+        "ambient",
+        "coolant",
+        "u_d",
+        "u_q",
+        "motor_speed",
+        "torque",
+        "i_d",
+        "i_q",
+        "pm",
+        "stator_yoke",
+        "stator_tooth",
+        "stator_winding",
+        "profile_id",
+        "battery_temp",
+        "soc",
+        "power_draw",
     ]
     for key in expected_keys:
         assert key in reading, f"Missing key: {key}"
@@ -70,7 +83,9 @@ def test_derate_action_reduces_load_then_expires():
     assert sim.apply_effect("Derate motor torque by 40%. Part: Stator winding coil assembly")
     derated = sim.get_state()
     assert derated["derated"] is True
-    assert derated["motor_speed"] == baseline["motor_speed"] * (1 - cfg.healing.throttle_rpm_reduction)
+    assert derated["motor_speed"] == baseline["motor_speed"] * (
+        1 - cfg.healing.throttle_rpm_reduction
+    )
     assert derated["i_q"] == baseline["i_q"] * (1 - cfg.healing.throttle_current_reduction)
 
     for _ in range(cfg.healing.derate_ticks):

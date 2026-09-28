@@ -30,10 +30,7 @@ class FleetSimulator:
         num_vehicles: int = 5,
         model_dir: str = "latest",
     ) -> None:
-        self.vehicles = [
-            VehicleSimulator(vehicle_id=f"v-{i+1:03d}")
-            for i in range(num_vehicles)
-        ]
+        self.vehicles = [VehicleSimulator(vehicle_id=f"v-{i + 1:03d}") for i in range(num_vehicles)]
         self.predictor = FaultPredictor(model_dir)
         self.tick_count = 0
         self.history: list[list[dict]] = []

@@ -1,16 +1,15 @@
 """Model registry for ML artifact versioning and retrieval."""
 
 import json
-import re
 import logging
-import os
-import shutil
+import re
 from pathlib import Path
-from typing import Any, Tuple, Optional
+from typing import Any
 
 import joblib
 
 logger = logging.getLogger(__name__)
+
 
 class ModelRegistry:
     """Handles versioning, saving, and loading of ML models."""
@@ -38,8 +37,8 @@ class ModelRegistry:
         model: Any,
         scaler: Any,
         metrics: dict,
-        version: Optional[str] = None,
-        baseline: Optional[dict] = None
+        version: str | None = None,
+        baseline: dict | None = None,
     ) -> str:
         """Saves model, scaler, metrics, and data baselines under a specific version."""
         if version is None:
@@ -50,10 +49,10 @@ class ModelRegistry:
 
         joblib.dump(model, version_dir / "model.pkl")
         joblib.dump(scaler, version_dir / "scaler.pkl")
-        
+
         with open(version_dir / "metrics.json", "w") as f:
             json.dump(metrics, f, indent=2)
-            
+
         if baseline is not None:
             with open(version_dir / "baseline.json", "w") as f:
                 json.dump(baseline, f, indent=2)
@@ -69,10 +68,10 @@ class ModelRegistry:
         """Retrieves the string of the latest model version."""
         if not self.latest_pointer.exists():
             raise FileNotFoundError("No models found in the registry.")
-        with open(self.latest_pointer, "r") as f:
+        with open(self.latest_pointer) as f:
             return f.read().strip()
 
-    def load(self, version: str = "latest") -> Tuple[Any, Any, dict, Optional[dict]]:
+    def load(self, version: str = "latest") -> tuple[Any, Any, dict, dict | None]:
         """Loads model, scaler, and metrics given a version string (or 'latest')."""
         if version == "latest":
             version = self.get_latest_version()
@@ -85,13 +84,13 @@ class ModelRegistry:
 
         model = joblib.load(version_dir / "model.pkl")
         scaler = joblib.load(version_dir / "scaler.pkl")
-        
-        with open(version_dir / "metrics.json", "r") as f:
+
+        with open(version_dir / "metrics.json") as f:
             metrics = json.load(f)
-            
+
         baseline = None
         if (version_dir / "baseline.json").exists():
-            with open(version_dir / "baseline.json", "r") as f:
+            with open(version_dir / "baseline.json") as f:
                 baseline = json.load(f)
 
         logger.info(f"Loaded model artifacts from {version_dir}")

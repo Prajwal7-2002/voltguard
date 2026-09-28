@@ -29,7 +29,7 @@ def main() -> None:
     parser.add_argument("--model", type=str, default="latest", help="Model version")
     args = parser.parse_args()
 
-    console.print(f"\n[bold cyan]VoltGuard PMSM Fleet Simulation[/bold cyan]")
+    console.print("\n[bold cyan]VoltGuard PMSM Fleet Simulation[/bold cyan]")
     console.print(f"  Vehicles: {args.vehicles}  |  Ticks: {args.ticks}\n")
 
     fleet = FleetSimulator(
@@ -60,10 +60,7 @@ def main() -> None:
             fault_counts[fault_code] = fault_counts.get(fault_code, 0) + 1
 
             # Color-code fault
-            if fault_code == 0:
-                fault_str = "[green]OK Normal[/green]"
-            else:
-                fault_str = "[red]! Thermal[/red]"
+            fault_str = "[green]OK Normal[/green]" if fault_code == 0 else "[red]! Thermal[/red]"
 
             if fault_code != 0:
                 healed_count += 1
@@ -85,12 +82,14 @@ def main() -> None:
 
     # Summary
     total = sum(fault_counts.values())
-    console.print(f"\n[bold]{'='*60}[/bold]")
-    console.print(f"[bold cyan]  Simulation Complete[/bold cyan]")
+    console.print(f"\n[bold]{'=' * 60}[/bold]")
+    console.print("[bold cyan]  Simulation Complete[/bold cyan]")
     console.print(f"  Total predictions: {total}")
-    console.print(f"  Normal: [green]{fault_counts.get(0, 0)}[/green]  |  Thermal faults: [red]{fault_counts.get(1, 0)}[/red]")
+    console.print(
+        f"  Normal: [green]{fault_counts.get(0, 0)}[/green]  |  Thermal faults: [red]{fault_counts.get(1, 0)}[/red]"
+    )
     console.print(f"  Self-healing actions taken: [bold]{healed_count}[/bold]")
-    console.print(f"[bold]{'='*60}[/bold]\n")
+    console.print(f"[bold]{'=' * 60}[/bold]\n")
 
 
 if __name__ == "__main__":

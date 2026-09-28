@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from typing import List
-import asyncio
 import json
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from voltguard.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["Alerts"])
+
 
 class ConnectionManager:
     def __init__(self):
@@ -29,7 +29,9 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Error sending message to websocket: {e}")
 
+
 manager = ConnectionManager()
+
 
 @router.websocket("/alerts")
 async def websocket_endpoint(websocket: WebSocket):
@@ -41,7 +43,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # In a real setup, we might listen to an internal Event Bus here and 
+            # In a real setup, we might listen to an internal Event Bus here and
             # push to the websocket independently of user incoming messages.
             # Here we just echo back acknowledgements.
             await manager.broadcast({"status": "received", "data": json.loads(data)})
